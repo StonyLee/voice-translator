@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="음성번역">
+  <link rel="preconnect" href="https://api.openai.com" crossorigin>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -18,9 +19,12 @@
   <main id="screen">
     <section id="history" aria-label="지나간 말" aria-live="off"></section>
     <button id="jump" hidden>최신으로 ↓</button>
-    <section id="stage" aria-label="지금 들리는 말" aria-live="polite">
-      <p id="placeholder">마이크를 누르면 듣기 시작해요</p>
-    </section>
+    <div id="live">
+      <div id="glow" aria-hidden="true"></div>
+      <section id="stage" aria-label="지금 들리는 말" aria-live="polite">
+        <p id="placeholder">마이크를 누르면 듣기 시작해요</p>
+      </section>
+    </div>
     <div id="below">
       <div id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <p id="status">대기 중</p>
@@ -59,6 +63,21 @@
         <button data-sens="near">가까운 목소리</button>
         <button data-sens="normal">보통</button>
         <button data-sens="far">먼 소리까지</button>
+      </div>
+    </div>
+    <div class="field">
+      <span>음성 인식</span>
+      <div class="segmented" id="s-delay">
+        <button data-delay="minimal">가장 빠르게</button>
+        <button data-delay="low">균형</button>
+        <button data-delay="medium">더 정확하게</button>
+      </div>
+    </div>
+    <div class="field">
+      <span>번역 속도</span>
+      <div class="segmented two" id="s-fast">
+        <button data-fast="1">빠른 모드 (요금 2배)</button>
+        <button data-fast="0">일반</button>
       </div>
     </div>
     <label>음성 인식 모델 <input id="s-stt" spellcheck="false" autocomplete="off"></label>

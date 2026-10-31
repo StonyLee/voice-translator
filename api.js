@@ -1,7 +1,7 @@
 // OpenAI 연결: 실시간 전사(WebSocket)와 한국어 번역(Chat Completions)
 const API = 'https://api.openai.com/v1';
 const WS_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
-const CHUNK_SAMPLES = 4800; // 200ms
+const CHUNK_SAMPLES = 2400; // 100ms
 
 export const DEFAULT_STT_MODEL = 'gpt-live-transcribe';
 export const DEFAULT_TRANSLATE_MODEL = 'gpt-6-luna';
@@ -39,8 +39,8 @@ export async function fetchUsdKrw() {
 }
 
 export class Transcriber {
-  constructor({ key, model, languages, onEvent, onError, onDisconnect }) {
-    Object.assign(this, { key, model, languages, onEvent, onError, onDisconnect });
+  constructor({ key, model, languages, delay, onEvent, onError, onDisconnect }) {
+    Object.assign(this, { key, model, languages, delay, onEvent, onError, onDisconnect });
     this.useDelay = true;
     this.useLanguages = true;
     this.pending = [];
@@ -89,7 +89,7 @@ export class Transcriber {
 
   audioConfig() {
     const transcription = { model: this.model };
-    if (this.useDelay) transcription.delay = 'low';
+    if (this.useDelay) transcription.delay = this.delay;
     if (this.useLanguages && this.languages.length) transcription.languages = this.languages;
     return { format: { type: 'audio/pcm', rate: 24000 }, transcription, turn_detection: null };
   }
@@ -101,6 +101,12 @@ export class Transcriber {
   setLanguages(languages) {
     this.languages = languages;
     this.useLanguages = true;
+    this.sendConfig();
+  }
+
+  setDelay(delay) {
+    this.delay = delay;
+    this.useDelay = true;
     this.sendConfig();
   }
 
@@ -117,7 +123,7 @@ export class Transcriber {
   send(obj) {
     const msg = JSON.stringify(obj);
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(msg);
-    else if (this.pending.length < 150) this.pending.push(msg);
+    else if (this.pending.length < 300) this.pending.push(msg);
   }
 
   audio(pcm) {
@@ -155,9 +161,11 @@ export class Transcriber {
 const NAMES = { en: '영어', ja: '일본어' };
 
 export class Translator {
-  constructor({ key, model, onUsage }) {
+  constructor({ key, model, fast, onUsage, onLatency }) {
     this.key = key;
+    this.fast = fast;
     this.onUsage = onUsage;
+    this.onLatency = onLatency;
     this.models = [model, ...TRANSLATE_FALLBACKS.filter((m) => m !== model)];
     this.reasoning = true;
   }
@@ -169,27 +177,53 @@ export class Translator {
     return rule;
   }
 
-  async translate(text, { lang, partial, context = [], signal }) {
+  // 번역문을 조각으로 받아 onText로 넘기고, 끝나면 전체를 돌려준다
+  async readStream(res, onText, startedAt) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', out = '', fast = this.fast;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') continue;
+        const chunk = JSON.parse(payload);
+        if (chunk.usage) this.onUsage?.(chunk.usage, fast);
+        const piece = chunk.choices?.[0]?.delta?.content;
+        if (!piece) continue;
+        if (!out) this.onLatency?.(Date.now() - startedAt);
+        out += piece;
+        onText?.(out.trim());
+      }
+    }
+    return out.trim();
+  }
+
+  async translate(text, { lang, partial, context = [], signal, onText }) {
     const messages = [{ role: 'system', content: this.prompt(lang, partial) }];
     if (context.length) messages.push({ role: 'system', content: `앞선 대화(참고용):\n${context.join('\n')}` });
     messages.push({ role: 'user', content: text });
 
     for (;;) {
       const model = this.models[0];
-      const body = { model, messages };
+      const body = { model, messages, stream: true, stream_options: { include_usage: true } };
       if (this.reasoning && /^gpt-[56]/.test(model)) body.reasoning_effort = 'none';
+      if (this.fast) body.service_tier = 'fast';
+      const startedAt = Date.now();
       const res = await fetch(`${API}/chat/completions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal,
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.usage) this.onUsage?.(data.usage);
-        return data.choices[0].message.content.trim();
-      }
+      if (res.ok) return await this.readStream(res, onText, startedAt);
       const err = await failure(res);
+      if (this.fast && /service.?tier|fast/i.test(err.message) && res.status !== 401 && res.status !== 429) { this.fast = false; continue; }
       if (res.status === 400 && /reasoning/i.test(err.message) && this.reasoning) { this.reasoning = false; continue; }
       if ((res.status === 404 || /model/i.test(err.message)) && res.status !== 401 && this.models.length > 1) { this.models.shift(); continue; }
       throw err;

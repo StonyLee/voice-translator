@@ -2,6 +2,9 @@
   --bg: #111315;
   --panel: #1a1d20;
   --line: #2b2f33;
+  --live: #1b2230;
+  --live-line: #2a3345;
+  --live-bright: #33405a;
   --text: #f4f1ea;
   --muted: #a3a7a6;
   --accent: #f2b35e;
@@ -26,7 +29,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 #history::before { content: ""; margin-top: auto; }
 
-#stage { flex: 0 1 auto; max-height: 62%; overflow-y: auto; padding: 10px 20px; display: flex; flex-direction: column; gap: 14px; }
+#live {
+  flex: 0 1 auto; min-height: 32%; max-height: 70%; position: relative; display: flex; flex-direction: column; justify-content: center;
+  background: var(--live); border-block: 1px solid var(--live-line);
+}
+/* 음성이 들어오면 #glow가 서서히 나타나고, 그 안에서 밝기가 천천히 오르내린다 */
+#glow { position: absolute; inset: 0; opacity: 0; transition: opacity 1s ease; pointer-events: none; }
+#glow::before { content: ""; position: absolute; inset: 0; background: var(--live-bright); animation: breathe 2.6s ease-in-out infinite alternate; }
+#live.hearing #glow { opacity: 1; }
+@keyframes breathe { from { opacity: .1; } to { opacity: 1; } }
+#stage { position: relative; flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
 #placeholder { margin: 0; text-align: center; color: var(--muted); font-size: 1.05rem; }
 
 .turn { --voice: var(--accent); padding-left: 12px; border-left: 2px solid var(--voice); animation: rise .28s ease-out; }
@@ -37,8 +49,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .original, .korean { margin: 0; overflow-wrap: anywhere; transition: font-size .25s ease, color .25s ease, opacity .25s ease; }
 .turn.ko .original { display: none; }
 
-#stage .original { font-size: 1.02rem; line-height: 1.45; color: #c9c9c3; }
-#stage .korean { font-size: 1.55rem; line-height: 1.4; font-weight: 650; letter-spacing: -.01em; margin-top: 3px; }
+#stage .who { font-size: .8rem; }
+#stage .original { font-size: 1.25rem; line-height: 1.4; color: #d3d4d0; }
+#stage .korean { font-size: 2.15rem; line-height: 1.32; font-weight: 650; letter-spacing: -.015em; margin-top: 4px; }
+#stage .turn:not(:only-of-type) .original { font-size: 1.1rem; }
+#stage .turn:not(:only-of-type) .korean { font-size: 1.75rem; }
 #stage .turn.partial .korean { opacity: .72; }
 #stage .turn.corrected .korean { animation: settle .5s ease-out; }
 @keyframes settle { from { color: var(--voice); } }
@@ -90,6 +105,7 @@ input { width: 100%; padding: 12px; font: inherit; font-size: 16px; color: var(-
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .hint { margin: 6px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.5; }
 .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--bg); border-radius: 10px; }
+.segmented.two { grid-template-columns: repeat(2, 1fr); }
 .segmented button { padding: 9px 2px; border-radius: 7px; font-size: .78rem; color: var(--muted); }
 .segmented button.selected { background: var(--line); color: var(--text); }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }

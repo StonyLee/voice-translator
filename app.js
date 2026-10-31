@@ -9,10 +9,11 @@ const VOICE_COLORS = ['#f2b35e', '#5fd0c5', '#ef8f9f', '#a99cf0', '#a9d36a', '#6
 const LANG_LABEL = { auto: '자동', ko: '한국어', en: 'English', ja: '日本語' };
 const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語' };
 const STAGE_HOLD_MS = 9000;
-const PARTIAL_GAP = { ja: 300, en: 700 };
+const PARTIAL_GAP = { ja: 200, en: 450 };
+const HEARING_HOLD_MS = 1500;
 const RATE_KEY = 'rt-rate';
-// 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.15 (초당 1회, gpt-6-luna 기준)
-const USD_PER_HOUR = 0.017 * 60 + 0.15;
+// 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
+const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
 const USAGE_KEY = 'rt-usage';
 const USD_PER_AUDIO_SEC = 0.017 / 60;
 const USD_PER_INPUT_TOKEN = 0.1 / 1e6, USD_PER_OUTPUT_TOKEN = 0.5 / 1e6; // gpt-6-luna 기준
@@ -25,7 +26,7 @@ function writeLocal(key, value) {
 }
 
 const settings = {
-  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal',
+  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal', delay: 'minimal', fast: true,
   ...readJson(SETTINGS_KEY),
 };
 const saveSettings = () => writeLocal(SETTINGS_KEY, JSON.stringify(settings));
@@ -38,7 +39,7 @@ let savedAt = 0; // 마지막 저장 시점의 완료 발화 수
 const stage = [];
 
 // 실행 상태
-let running = false, exited = false, segmenter, transcriber, translator, audio, wakeLock, awakeVideo, draftTimer, usdKrw;
+let running = false, exited = false, segmenter, transcriber, translator, audio, wakeLock, awakeVideo, draftTimer, usdKrw, hearingTimer, translateMs;
 const unsavedUsage = { audioSec: 0, inTok: 0, outTok: 0 };
 
 const hasRecord = () => turns.some((t) => t.text && !t.noise);
@@ -85,6 +86,7 @@ function paint(t) {
   if (foreign && t.koState === 'partial') tag = t.lang === 'en' ? '추정 번역' : '실시간 번역';
   if (foreign && t.koState === 'failed') tag = '번역 실패';
   t.el.querySelector('.tag').textContent = tag;
+  if (stage.includes(t)) $('stage').scrollTop = $('stage').scrollHeight;
 }
 
 function nearBottom() {
@@ -157,6 +159,13 @@ function schedulePartial(t) {
   t.timer = setTimeout(() => runPartial(t), wait);
 }
 
+// 새 번역이 도착하는 중에는 이미 보이는 번역보다 길어질 때부터 바꿔, 글자가 줄었다 늘었다 하지 않게 한다
+function showStreaming(t, text) {
+  if (text.length < t.ko.replace(/…$/, '').length) return;
+  t.ko = text;
+  paint(t);
+}
+
 async function runPartial(t) {
   t.timer = null;
   if (t.done) return;
@@ -165,7 +174,10 @@ async function runPartial(t) {
   t.lastRequest = Date.now();
   t.abort = new AbortController();
   try {
-    const ko = await translator.translate(source, { lang: t.lang, partial: true, context: context(t), signal: t.abort.signal });
+    const ko = await translator.translate(source, {
+      lang: t.lang, partial: true, context: context(t), signal: t.abort.signal,
+      onText: (text) => { if (!t.done) { t.koState = 'partial'; showStreaming(t, text); } },
+    });
     if (!t.done) { t.ko = ko; t.koState = 'partial'; paint(t); }
   } catch (err) {
     if (err.name !== 'AbortError') toast(explain(err));
@@ -181,7 +193,10 @@ async function translateFinal(t) {
   if (!needsTranslation(t)) return;
   const hadPartial = !!t.ko;
   try {
-    t.ko = await translator.translate(t.text, { lang: t.lang, partial: false, context: context(t) });
+    t.ko = await translator.translate(t.text, {
+      lang: t.lang, partial: false, context: context(t),
+      onText: (text) => showStreaming(t, text),
+    });
     t.koState = 'final';
     if (hadPartial && t.el) {
       t.el.classList.remove('corrected');
@@ -260,7 +275,8 @@ function settleOpenTurns() {
 /* ---------- 듣기 시작·정지 ---------- */
 
 function showListening() {
-  $('status').textContent = `듣는 중 · ${LANG_LABEL[settings.lang]}`;
+  const speed = translateMs ? ` · 번역 응답 ${(translateMs / 1000).toFixed(1)}초` : '';
+  $('status').textContent = `듣는 중 · ${LANG_LABEL[settings.lang]}${speed}`;
 }
 
 function setRunning(on) {
@@ -268,7 +284,12 @@ function setRunning(on) {
   $('m-mic').classList.toggle('on', on);
   $('m-mic').setAttribute('aria-label', on ? '듣기 정지' : '듣기 시작');
   if (on) showListening();
-  else { $('status').textContent = '대기 중'; paintMeter(-90, false); }
+  else {
+    $('status').textContent = '대기 중';
+    paintMeter(-90, false);
+    clearTimeout(hearingTimer);
+    $('live').classList.remove('hearing');
+  }
   refreshPlaceholder();
 }
 
@@ -305,10 +326,15 @@ async function start() {
   $('m-mic').disabled = true;
   try {
     translator = new Translator({
-      key: settings.key, model: settings.trans,
-      onUsage: ({ prompt_tokens = 0, completion_tokens = 0 }) => {
-        unsavedUsage.inTok += prompt_tokens;
-        unsavedUsage.outTok += completion_tokens;
+      key: settings.key, model: settings.trans, fast: settings.fast,
+      // 빠른 모드는 토큰 단가가 2배라 요금 계산용 토큰 수도 2배로 기록한다
+      onUsage: ({ prompt_tokens = 0, completion_tokens = 0 }, fast) => {
+        unsavedUsage.inTok += prompt_tokens * (fast ? 2 : 1);
+        unsavedUsage.outTok += completion_tokens * (fast ? 2 : 1);
+      },
+      onLatency: (ms) => {
+        translateMs = ms;
+        if (running) showListening();
       },
     });
     if (DEMO) {
@@ -319,7 +345,7 @@ async function start() {
         audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true, autoGainControl: false },
       });
       transcriber = new Transcriber({
-        key: settings.key, model: settings.stt, languages: languageHints(),
+        key: settings.key, model: settings.stt, languages: languageHints(), delay: settings.delay,
         onEvent: (evt) => {
           if (evt.type === 'session.created' && running) showListening();
           onServerEvent(evt);
@@ -438,7 +464,7 @@ const today = () => new Date().toLocaleDateString('sv');
 function showCost(rate) {
   usdKrw = rate;
   paintUsage();
-  const won = Math.round((USD_PER_HOUR * rate) / 10) * 10;
+  const won = Math.round((usdPerHour() * rate) / 10) * 10;
   $('cost').textContent = `한 시간 사용에 약 ${won.toLocaleString('ko-KR')}원입니다.`;
   $('cost').title = `1달러 ${Math.round(rate).toLocaleString('ko-KR')}원 기준`;
   $('cost').hidden = false;
@@ -486,6 +512,11 @@ const BAR_SHAPE = [0.55, 0.8, 0.95, 1, 0.9, 0.75, 0.5];
 function paintMeter(db, loud) {
   const level = Math.max(0.12, Math.min(1, (db + 62) / 44));
   $('meter').classList.toggle('on', loud);
+  if (loud) {
+    $('live').classList.add('hearing');
+    clearTimeout(hearingTimer);
+    hearingTimer = setTimeout(() => $('live').classList.remove('hearing'), HEARING_HOLD_MS);
+  }
   bars.forEach((bar, i) => { bar.style.transform = `scaleY(${Math.max(0.12, level * BAR_SHAPE[i])})`; });
 }
 
@@ -623,12 +654,18 @@ function refreshSens() {
   document.querySelectorAll('#s-sens button').forEach((b) => b.classList.toggle('selected', b.dataset.sens === settings.sens));
 }
 
+function refreshSpeed() {
+  document.querySelectorAll('#s-delay button').forEach((b) => b.classList.toggle('selected', b.dataset.delay === settings.delay));
+  document.querySelectorAll('#s-fast button').forEach((b) => b.classList.toggle('selected', (b.dataset.fast === '1') === settings.fast));
+}
+
 function openSettings() {
   $('s-key').value = settings.key;
   $('s-stt').value = settings.stt;
   $('s-trans').value = settings.trans;
   $('s-result').textContent = '';
   refreshSens();
+  refreshSpeed();
   $('settings-sheet').showModal();
 }
 
@@ -671,7 +708,26 @@ $('s-sens').addEventListener('click', (e) => {
   segmenter?.setMargin?.(SENSITIVITY[sens]);
 });
 
-$('s-done').onclick = () => { applySettings(); $('settings-sheet').close(); };
+$('s-delay').addEventListener('click', (e) => {
+  const delay = e.target.closest('button')?.dataset.delay;
+  if (!delay) return;
+  settings.delay = delay;
+  saveSettings();
+  refreshSpeed();
+  transcriber?.setDelay(delay);
+});
+
+$('s-fast').addEventListener('click', (e) => {
+  const fast = e.target.closest('button')?.dataset.fast;
+  if (!fast) return;
+  settings.fast = fast === '1';
+  saveSettings();
+  refreshSpeed();
+  if (translator) translator.fast = settings.fast;
+  if (usdKrw) showCost(usdKrw);
+});
+
+$('s-done').onclick =() => { applySettings(); $('settings-sheet').close(); };
 $('settings-sheet').addEventListener('close', applySettings);
 $('s-test').onclick = async () => {
   $('s-result').textContent = '확인 중…';

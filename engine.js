@@ -141,7 +141,7 @@ export class LoudVoiceGate {
 }
 
 const PREROLL_FRAMES = 8;
-const END_SILENCE_MS = 600;
+const END_SILENCE_MS = 500;
 const SOFT_MAX_MS = 8000, SOFT_SILENCE_MS = 240, HARD_MAX_MS = 15000;
 const SPLIT_WINDOW = 12, SPLIT_CONFIRM = 10;
 

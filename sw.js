@@ -1,5 +1,5 @@
 // 앱 파일만 저장해 두고 새 버전을 백그라운드로 갱신한다. OpenAI 요청은 건드리지 않는다.
-const CACHE = 'rt-translator-v5';
+const CACHE = 'rt-translator-v6';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'api.js', 'engine.js', 'worklet.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
