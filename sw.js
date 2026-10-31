@@ -1,5 +1,5 @@
 // 온라인이면 항상 서버에서 확인한 최신 파일을 쓰고, 오프라인일 때만 저장본을 쓴다. OpenAI 요청은 건드리지 않는다.
-const CACHE = 'rt-translator-v8';
+const CACHE = 'rt-translator-v9';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'api.js', 'engine.js', 'worklet.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

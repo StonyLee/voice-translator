@@ -32,6 +32,15 @@ test('네트워크 조각이 줄 중간에서 잘려도 번역문을 순서대�
   assert.equal(latency.length, 1);
 });
 
+test('스페인어와 중국어도 언어 이름과 추정 번역 규칙을 넣어 요청한다', async () => {
+  const bodies = stubFetch(sse(piece('네')), sse(piece('네')));
+  const tr = new Translator({ key: 'k', model: 'm', fast: false });
+  await tr.translate('Hola amigo', { lang: 'es', partial: true });
+  await tr.translate('你好', { lang: 'zh', partial: true });
+  assert.match(bodies[0].messages[0].content, /스페인어.*추정/);
+  assert.match(bodies[1].messages[0].content, /중국어.*추정/);
+});
+
 test('빠른 모드가 거절되면 빼고 다시 요청한다', async () => {
   const bodies = stubFetch(
     new Response(JSON.stringify({ error: { message: 'Unsupported service_tier' } }), { status: 400 }),

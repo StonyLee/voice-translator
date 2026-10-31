@@ -34,7 +34,7 @@
   </main>
 
   <nav id="menu" aria-label="메뉴">
-    <button id="m-lang"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span id="m-lang-label">자동</span></button>
+    <button id="m-lang"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span id="m-lang-label">자동 (영어, 일본어)</span></button>
     <button id="m-save"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span>저장</span></button>
     <button id="m-mic" aria-label="듣기 시작"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button id="m-settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>설정</span></button>
@@ -44,10 +44,12 @@
   <dialog id="lang-sheet" class="sheet">
     <h2>듣는 언어</h2>
     <div class="options" id="lang-options">
-      <button data-lang="auto"><b>자동</b><small>한국어·영어·일본어를 알아서 구분</small></button>
+      <button data-lang="auto"><b>자동 (영어, 일본어)</b><small>영어·일본어를 구분해 번역하고, 한국어는 그대로 표시</small></button>
       <button data-lang="ko"><b>한국어</b></button>
       <button data-lang="en"><b>English</b><small>원문 + 한글 번역</small></button>
       <button data-lang="ja"><b>日本語</b><small>원문 + 한글 번역</small></button>
+      <button data-lang="es"><b>Español</b><small>스페인어 · 원문 + 한글 번역</small></button>
+      <button data-lang="zh"><b>中文</b><small>중국어 · 원문 + 한글 번역</small></button>
     </div>
   </dialog>
 

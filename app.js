@@ -6,12 +6,13 @@ const DEMO = new URLSearchParams(location.search).has('demo');
 const SETTINGS_KEY = 'rt-settings';
 const DRAFT_KEY = 'rt-draft';
 const VOICE_COLORS = ['#f2b35e', '#5fd0c5', '#ef8f9f', '#a99cf0', '#a9d36a', '#6db8ef', '#e6a0d8', '#d0c28a'];
-const LANG_LABEL = { auto: '자동', ko: '한국어', en: 'English', ja: '日本語' };
-const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語' };
+const LANG_LABEL = { auto: '자동 (영어, 일본어)', ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文' };
+const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語', es: 'ES', zh: '中文' };
+const isForeign = (lang) => lang in PARTIAL_GAP;
 const STAGE_HOLD_MS = 9000;
-const PARTIAL_GAP = { ja: 200, en: 450 };
+const PARTIAL_GAP = { ja: 200, en: 450, es: 450, zh: 450 };
 const HEARING_HOLD_MS = 1500;
-const APP_VERSION = 8; // sw.js의 CACHE 번호와 맞춘다
+const APP_VERSION = 9; // sw.js의 CACHE 번호와 맞춘다
 const RATE_KEY = 'rt-rate';
 // 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
 const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
@@ -78,13 +79,13 @@ function paint(t) {
   t.el.style.setProperty('--voice', VOICE_COLORS[speaker % VOICE_COLORS.length]);
   t.el.querySelector('.name').textContent = voiceName(speaker);
   t.el.querySelector('.lang').textContent = LANG_TAG[t.lang] || '';
-  const foreign = t.lang === 'en' || t.lang === 'ja';
+  const foreign = isForeign(t.lang);
   t.el.classList.toggle('ko', !foreign);
   t.el.classList.toggle('partial', foreign && t.koState !== 'final');
   t.el.querySelector('.original').textContent = t.text;
   t.el.querySelector('.korean').textContent = foreign ? (t.ko || '…') : t.text;
   let tag = '';
-  if (foreign && t.koState === 'partial') tag = t.lang === 'en' ? '추정 번역' : '실시간 번역';
+  if (foreign && t.koState === 'partial') tag = t.lang === 'ja' ? '실시간 번역' : '추정 번역';
   if (foreign && t.koState === 'failed') tag = '번역 실패';
   t.el.querySelector('.tag').textContent = tag;
   if (stage.includes(t)) $('stage').scrollTop = $('stage').scrollHeight;
@@ -147,7 +148,7 @@ function update(t) {
 
 /* ---------- 번역 ---------- */
 
-const needsTranslation = (t) => (t.lang === 'en' || t.lang === 'ja') && !t.hiddenVoice && !t.noise;
+const needsTranslation = (t) => isForeign(t.lang) && !t.hiddenVoice && !t.noise;
 
 function context(t) {
   return turns.filter((o) => o !== t && o.done && o.text && !o.noise).slice(-2).map((o) => o.text);
@@ -155,7 +156,7 @@ function context(t) {
 
 function schedulePartial(t) {
   if (!needsTranslation(t) || t.done || t.busy || t.timer) return;
-  if (t.lang === 'en' && t.text.trim().split(/\s+/).length < 2) return;
+  if ((t.lang === 'en' || t.lang === 'es') && t.text.trim().split(/\s+/).length < 2) return;
   const wait = Math.max(0, t.lastRequest + PARTIAL_GAP[t.lang] - Date.now());
   t.timer = setTimeout(() => runPartial(t), wait);
 }
