@@ -1,11 +1,11 @@
 # 음성번역
 
-휴대폰 브라우저에 설치해 쓰는 개인용 앱(PWA)입니다. 빌드 과정이 없고, 이 폴더를 그대로 HTTPS 주소에 올리면 됩니다.
+휴대폰 브라우저에 설치해 쓰는 개인용 앱(PWA)입니다. 빌드 과정이 없고, `main` 브랜치에 올리면 GitHub Pages에 자동으로 배포됩니다.
 API 키는 파일에 들어 있지 않고 각 휴대폰의 앱 저장소에만 저장됩니다.
 
 ## 설치
 
-1. https://app.netlify.com/drop 에서 이 폴더를 끌어다 놓아 HTTPS 주소를 받습니다. (Cloudflare Pages, GitHub Pages도 가능)
+1. 앱 주소: https://stonylee.github.io/voice-translator/
 2. 휴대폰에서 그 주소를 열고 홈 화면에 추가합니다.
    - 아이폰: Safari → 공유 → 홈 화면에 추가
    - 안드로이드: Chrome → 메뉴 → 앱 설치(또는 홈 화면에 추가)
