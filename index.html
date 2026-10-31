@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>음성번역</title>
+  <meta name="theme-color" content="#111315">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="음성번역">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="screen">
+    <section id="history" aria-label="지나간 말" aria-live="off"></section>
+    <button id="jump" hidden>최신으로 ↓</button>
+    <section id="stage" aria-label="지금 들리는 말" aria-live="polite">
+      <p id="placeholder">마이크를 누르면 듣기 시작해요</p>
+    </section>
+    <div id="below">
+      <div id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p id="status">대기 중</p>
+      <p id="cost" hidden></p>
+      <p id="usage"></p>
+    </div>
+  </main>
+
+  <nav id="menu" aria-label="메뉴">
+    <button id="m-lang"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span id="m-lang-label">자동</span></button>
+    <button id="m-save"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span>저장</span></button>
+    <button id="m-mic" aria-label="듣기 시작"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <button id="m-settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>설정</span></button>
+    <button id="m-exit"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/></svg><span>종료</span></button>
+  </nav>
+
+  <dialog id="lang-sheet" class="sheet">
+    <h2>듣는 언어</h2>
+    <div class="options" id="lang-options">
+      <button data-lang="auto"><b>자동</b><small>한국어·영어·일본어를 알아서 구분</small></button>
+      <button data-lang="ko"><b>한국어</b></button>
+      <button data-lang="en"><b>English</b><small>원문 + 한글 번역</small></button>
+      <button data-lang="ja"><b>日本語</b><small>원문 + 한글 번역</small></button>
+    </div>
+  </dialog>
+
+  <dialog id="settings-sheet" class="sheet">
+    <h2>설정</h2>
+    <label>OpenAI API 키
+      <input id="s-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+    </label>
+    <p class="hint">키는 이 휴대폰에만 저장되고 OpenAI로만 전송돼요.</p>
+    <div class="field">
+      <span>듣는 범위</span>
+      <div class="segmented" id="s-sens">
+        <button data-sens="near">가까운 목소리</button>
+        <button data-sens="normal">보통</button>
+        <button data-sens="far">먼 소리까지</button>
+      </div>
+    </div>
+    <label>음성 인식 모델 <input id="s-stt" spellcheck="false" autocomplete="off"></label>
+    <label>번역 모델 <input id="s-trans" spellcheck="false" autocomplete="off"></label>
+    <div class="actions">
+      <button id="s-test" class="ghost">키 확인</button>
+      <button id="s-done" class="primary">완료</button>
+    </div>
+    <p id="s-result" class="hint" role="status"></p>
+  </dialog>
+
+  <dialog id="confirm" class="sheet">
+    <h2 id="c-title"></h2>
+    <p id="c-text" class="hint"></p>
+    <div class="stack" id="c-actions"></div>
+  </dialog>
+
+  <div id="ended" hidden>
+    <h1>종료했어요</h1>
+    <p>마이크가 꺼졌어요. 이 화면을 닫아도 돼요.</p>
+    <button id="restart" class="primary">다시 열기</button>
+  </div>
+
+  <div id="toast" role="alert" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
