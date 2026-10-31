@@ -53,7 +53,7 @@
 
   <dialog id="settings-sheet" class="sheet">
     <h2>설정</h2>
-    <button id="s-key-toggle" class="ghost wide" aria-expanded="false" aria-controls="s-key-box"></button>
+    <button id="s-key-toggle" class="ghost wide" aria-expanded="false" aria-controls="s-key-box">API 키</button>
     <div id="s-key-box" hidden>
       <label>OpenAI API 키
         <input id="s-key" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-…">
@@ -90,6 +90,7 @@
       <button id="s-done" class="primary">완료</button>
     </div>
     <p id="s-result" class="hint" role="status"></p>
+    <p id="s-version" class="hint"></p>
   </dialog>
 
   <dialog id="confirm" class="sheet">

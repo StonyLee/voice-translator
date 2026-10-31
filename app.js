@@ -11,6 +11,7 @@ const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語' };
 const STAGE_HOLD_MS = 9000;
 const PARTIAL_GAP = { ja: 200, en: 450 };
 const HEARING_HOLD_MS = 1500;
+const APP_VERSION = 8; // sw.js의 CACHE 번호와 맞춘다
 const RATE_KEY = 'rt-rate';
 // 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
 const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
@@ -780,9 +781,15 @@ window.addEventListener('popstate', () => {
 });
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // 새 버전이 설치되면 듣는 중이거나 저장 안 한 기록이 있을 때를 빼고 바로 다시 불러온다
+  const updating = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updating && !running && !isDirty()) location.reload();
+  });
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
+$('s-version').textContent = `앱 버전 ${APP_VERSION}`;
 refreshLangMenu();
 refreshPlaceholder();
 keepScreenOn();
