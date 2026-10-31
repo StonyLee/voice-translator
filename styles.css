@@ -113,6 +113,8 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .primary, .ghost, .plain { padding: 13px; border-radius: 11px; font-weight: 600; }
 .primary { background: var(--accent); color: #1b1408; }
 .ghost { border: 1px solid var(--line); }
+.wide { width: 100%; }
+#s-key-box[hidden] { display: none; }
 .plain { color: var(--muted); font-weight: 400; }
 
 #ended { position: fixed; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; background: var(--bg); text-align: center; }

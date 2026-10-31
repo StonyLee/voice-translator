@@ -53,10 +53,13 @@
 
   <dialog id="settings-sheet" class="sheet">
     <h2>설정</h2>
-    <label>OpenAI API 키
-      <input id="s-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
-    </label>
-    <p class="hint">키는 이 휴대폰에만 저장되고 OpenAI로만 전송돼요.</p>
+    <button id="s-key-toggle" class="ghost wide" aria-expanded="false" aria-controls="s-key-box"></button>
+    <div id="s-key-box" hidden>
+      <label>OpenAI API 키
+        <input id="s-key" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-…">
+      </label>
+      <p class="hint">키는 이 휴대폰에만 저장되고 OpenAI로만 전송돼요.</p>
+    </div>
     <div class="field">
       <span>듣는 범위</span>
       <div class="segmented" id="s-sens">

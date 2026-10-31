@@ -659,8 +659,16 @@ function refreshSpeed() {
   document.querySelectorAll('#s-fast button').forEach((b) => b.classList.toggle('selected', (b.dataset.fast === '1') === settings.fast));
 }
 
+// API 키는 버튼을 눌렀을 때만 보이고 수정할 수 있다
+function showKeyField(open) {
+  $('s-key-box').hidden = !open;
+  $('s-key-toggle').setAttribute('aria-expanded', open);
+  $('s-key-toggle').textContent = open ? 'API 키 숨기기' : ($('s-key').value.trim() ? 'API 키 보기·수정' : 'API 키 입력');
+}
+
 function openSettings() {
   $('s-key').value = settings.key;
+  showKeyField(false);
   $('s-stt').value = settings.stt;
   $('s-trans').value = settings.trans;
   $('s-result').textContent = '';
@@ -727,7 +735,13 @@ $('s-fast').addEventListener('click', (e) => {
   if (usdKrw) showCost(usdKrw);
 });
 
-$('s-done').onclick =() => { applySettings(); $('settings-sheet').close(); };
+$('s-key-toggle').onclick = () => {
+  const open = $('s-key-box').hidden;
+  showKeyField(open);
+  if (open) $('s-key').focus();
+};
+
+$('s-done').onclick = () => { applySettings(); $('settings-sheet').close(); };
 $('settings-sheet').addEventListener('close', applySettings);
 $('s-test').onclick = async () => {
   $('s-result').textContent = '확인 중…';
