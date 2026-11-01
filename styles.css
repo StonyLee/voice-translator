@@ -21,10 +21,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 #screen { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; padding-top: var(--safe-top); }
 
-/* 지금 말이 화면 중앙에 오도록 위아래를 같은 비율로 나눈다 */
-#history, #below { flex: 1 1 0; min-height: 0; }
+/* 지나간 말을 넓게 보도록 남는 높이는 모두 기록에 주고, 지금 말은 음량 표시 바로 위에 둔다 */
 #history {
-  overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 8px;
+  flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 8px;
   display: flex; flex-direction: column; gap: 14px;
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28px);
   mask-image: linear-gradient(to bottom, transparent, #000 28px);
@@ -84,7 +83,7 @@ html.flipped body { transform: rotate(180deg); }
 html.flipped dialog { transform: rotate(180deg); }
 html.flipped .sheet { margin: 0 auto auto; }
 
-#below { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding-bottom: 12px; }
+#below { flex: none; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 0 12px; }
 #status { margin: 0; font-size: .78rem; color: var(--muted); }
 #cost { margin: 0; padding-right: 14px; align-self: flex-end; font-size: .7rem; color: var(--muted); }
 #cost[hidden] { display: none; }
