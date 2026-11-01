@@ -1,6 +1,8 @@
 :root {
   --bg: #111315;
   --panel: #1a1d20;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
   --line: #2b2f33;
   --live: #1b2230;
   --live-line: #2a3345;
@@ -17,7 +19,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
 body { display: flex; flex-direction: column; height: 100dvh; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 
-#screen { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; padding-top: env(safe-area-inset-top); }
+#screen { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; padding-top: var(--safe-top); }
 
 /* 지금 말이 화면 중앙에 오도록 위아래를 같은 비율로 나눈다 */
 #history, #below { flex: 1 1 0; min-height: 0; }
@@ -64,12 +66,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 #history .tag { display: none; }
 
 #jump {
-  position: absolute; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 10px); z-index: 2;
+  position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--safe-top) + 10px); z-index: 2;
   padding: 7px 14px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: .8rem;
 }
 #jump[hidden] { display: none; }
 
-#below { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding-bottom: 12px; }
+#m-flip {
+  position: absolute; left: 14px; bottom: 12px; width: 46px; height: 46px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: #d6d4cd;
+}
+#m-flip svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#m-flip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+/* 화면 뒤집기: 대화상자는 최상위 층이라 body 회전을 따르지 않아 따로 돌리고, 안전 영역은 위아래를 맞바꾼다 */
+html.flipped { --safe-top: env(safe-area-inset-bottom); --safe-bottom: env(safe-area-inset-top); }
+html.flipped body { transform: rotate(180deg); }
+html.flipped dialog { transform: rotate(180deg); }
+html.flipped .sheet { margin: 0 auto auto; }
+
+#below { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding-bottom: 12px; }
 #status { margin: 0; font-size: .78rem; color: var(--muted); }
 #cost { margin: 0; padding-right: 14px; align-self: flex-end; font-size: .7rem; color: var(--muted); }
 #cost[hidden] { display: none; }
@@ -80,7 +95,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 #menu {
   flex: none; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  padding: 8px 8px calc(8px + var(--safe-bottom));
   background: var(--panel); border-top: 1px solid var(--line);
 }
 #menu button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; justify-content: center; font-size: .72rem; color: #d6d4cd; }
@@ -92,7 +107,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @keyframes pulse { 50% { box-shadow: 0 0 0 9px #ef7d6d22; } }
 
 .sheet {
-  width: 100%; max-width: 560px; margin: auto auto 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 560px; margin: auto auto 0; padding: 20px 20px calc(20px + var(--safe-bottom));
   border: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; background: var(--panel); color: var(--text);
 }
 .sheet::backdrop { background: #0009; }
@@ -125,7 +140,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 #ended button { padding-inline: 28px; }
 
 #toast {
-  position: fixed; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 4;
+  position: fixed; left: 16px; right: 16px; bottom: calc(92px + var(--safe-bottom)); z-index: 4;
   padding: 11px 14px; border-radius: 11px; background: #3a2422; border: 1px solid #6d3a33; font-size: .84rem; line-height: 1.45;
 }
 #toast[hidden] { display: none; }

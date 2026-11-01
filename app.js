@@ -12,7 +12,7 @@ const isForeign = (lang) => lang in PARTIAL_GAP;
 const STAGE_HOLD_MS = 9000;
 const PARTIAL_GAP = { ja: 200, en: 450, es: 450, zh: 450 };
 const HEARING_HOLD_MS = 1500;
-const APP_VERSION = 9; // sw.js의 CACHE 번호와 맞춘다
+const APP_VERSION = 10; // sw.js의 CACHE 번호와 맞춘다
 const RATE_KEY = 'rt-rate';
 // 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
 const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
@@ -28,7 +28,7 @@ function writeLocal(key, value) {
 }
 
 const settings = {
-  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal', delay: 'minimal', fast: true,
+  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal', delay: 'minimal', fast: true, flip: false,
   ...readJson(SETTINGS_KEY),
 };
 const saveSettings = () => writeLocal(SETTINGS_KEY, JSON.stringify(settings));
@@ -686,6 +686,16 @@ function applySettings() {
   saveSettings();
 }
 
+function applyFlip() {
+  document.documentElement.classList.toggle('flipped', settings.flip);
+  $('m-flip').setAttribute('aria-pressed', settings.flip);
+}
+
+$('m-flip').onclick = () => {
+  settings.flip = !settings.flip;
+  saveSettings();
+  applyFlip();
+};
 $('m-mic').onclick = () => (running ? stop() : start());
 $('m-save').onclick = saveRecord;
 $('m-exit').onclick = requestExit;
@@ -791,6 +801,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 }
 
 $('s-version').textContent = `앱 버전 ${APP_VERSION}`;
+applyFlip();
 refreshLangMenu();
 refreshPlaceholder();
 keepScreenOn();
