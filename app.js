@@ -1,4 +1,4 @@
-import { Segmenter, SENSITIVITY, PEAK_RANGE, detectLang } from './engine.js';
+import { Segmenter, SENSITIVITY, PEAK_RANGE, detectLang, applyCorrections } from './engine.js';
 import { Transcriber, Translator, ApiError, checkKey, fetchUsdKrw, FIELDS, DEFAULT_STT_MODEL, DEFAULT_TRANSLATE_MODEL } from './api.js';
 
 const $ = (id) => document.getElementById(id);
@@ -6,16 +6,18 @@ const DEMO = new URLSearchParams(location.search).has('demo');
 const SETTINGS_KEY = 'rt-settings';
 const DRAFT_KEY = 'rt-draft';
 const VOICE_COLORS = ['#f2b35e', '#5fd0c5', '#ef8f9f', '#a99cf0', '#a9d36a', '#6db8ef', '#e6a0d8', '#d0c28a'];
-const LANG_LABEL = { auto: '자동 (영어, 일본어)', 'en-ko': '영어/한국어', 'ja-ko': '일어/한국어', ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文' };
+const LANG_LABEL = { auto: '자동 (영어, 일본어)', 'en-ko': '영어/한국어', 'ja-ko': '일어/한국어', ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文', fr: 'Français' };
 // 여러 언어를 듣는 메뉴. 글자 종류로 고르고, 목록에 없는 언어로 보이면 첫 언어로 처리한다
 const LANG_SCOPE = { auto: ['ko', 'en', 'ja'], 'en-ko': ['en', 'ko'], 'ja-ko': ['ja', 'ko'] };
 const FIELD_LANGS = ['ko', 'en', 'en-ko', 'ja-ko'];
-const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語', es: 'ES', zh: '中文' };
+const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語', es: 'ES', zh: '中文', fr: 'FR' };
 const isForeign = (lang) => lang in PARTIAL_GAP;
 const STAGE_HOLD_MS = 9000;
-const PARTIAL_GAP = { ja: 200, en: 450, es: 450, zh: 450 };
+const PARTIAL_GAP = { ja: 200, en: 450, es: 450, zh: 450, fr: 450 };
+const FIX_KEY = 'rt-corrections';
+const MAX_CUSTOM_KEYWORDS = 40;
 const HEARING_HOLD_MS = 1500;
-const APP_VERSION = 12; // sw.js의 CACHE 번호와 맞춘다
+const APP_VERSION = 13; // sw.js의 CACHE 번호와 맞춘다
 const RATE_KEY = 'rt-rate';
 // 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
 const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
@@ -43,6 +45,18 @@ if (settings.rev !== 2) {
 }
 const activeField = () => (FIELD_LANGS.includes(settings.lang) ? FIELDS[settings.field] || null : null);
 const langLabel = () => LANG_LABEL[settings.lang] + (activeField() ? ` · ${activeField().label}` : '');
+
+// 교정 사전: 회사 고유 용어가 들어가므로 이 휴대폰에만 저장한다. from이 비면 인식 힌트 전용 용어다
+let corrections = readJson(FIX_KEY) || [];
+const fix = (text) => applyCorrections(text, corrections);
+
+// 분야 힌트에 내가 등록한 용어를 더해 음성 인식에 보낸다
+function sessionHints() {
+  const field = activeField();
+  const custom = [...new Set(corrections.map((r) => r.to))].slice(-MAX_CUSTOM_KEYWORDS);
+  if (!field && !custom.length) return null;
+  return { prompt: field?.prompt, keywords: [...new Set([...(field?.keywords || []), ...custom])] };
+}
 
 // 기록
 let turns = [];
@@ -93,8 +107,9 @@ function paint(t) {
   const foreign = isForeign(t.lang);
   t.el.classList.toggle('ko', !foreign);
   t.el.classList.toggle('partial', foreign && t.koState !== 'final');
-  t.el.querySelector('.original').textContent = t.text;
-  t.el.querySelector('.korean').textContent = foreign ? (t.ko || '…') : t.text;
+  const text = fix(t.text);
+  t.el.querySelector('.original').textContent = text;
+  t.el.querySelector('.korean').textContent = foreign ? (t.ko || '…') : text;
   let tag = '';
   if (foreign && t.koState === 'partial') tag = t.lang === 'ja' ? '실시간 번역' : '추정 번역';
   if (foreign && t.koState === 'failed') tag = '번역 실패';
@@ -169,7 +184,7 @@ function context(t) {
 
 function schedulePartial(t) {
   if (!needsTranslation(t) || t.done || t.busy || t.timer) return;
-  if ((t.lang === 'en' || t.lang === 'es') && t.text.trim().split(/\s+/).length < 2) return;
+  if (t.lang !== 'ja' && t.lang !== 'zh' && t.text.trim().split(/\s+/).length < 2) return;
   const wait = Math.max(0, t.lastRequest + PARTIAL_GAP[t.lang] - Date.now());
   t.timer = setTimeout(() => runPartial(t), wait);
 }
@@ -189,7 +204,7 @@ async function runPartial(t) {
   t.lastRequest = Date.now();
   t.abort = new AbortController();
   try {
-    const ko = await translator.translate(source, {
+    const ko = await translator.translate(fix(source), {
       lang: t.lang, partial: true, context: context(t), signal: t.abort.signal,
       onText: (text) => { if (!t.done) { t.koState = 'partial'; showStreaming(t, text); } },
     });
@@ -244,6 +259,7 @@ function bind(itemId) {
 function finishTurn(t) {
   t.done = true;
   t.doneAt = Date.now();
+  t.text = fix(t.text);
   if (!t.text.trim() || t.noise) {
     if (t.el) { stage.includes(t) && stage.splice(stage.indexOf(t), 1); t.el.remove(); refreshPlaceholder(); }
     t.noise = true;
@@ -361,7 +377,7 @@ async function start() {
         audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true, autoGainControl: settings.meeting },
       });
       transcriber = new Transcriber({
-        key: settings.key, model: settings.stt, languages: languageHints(), delay: settings.delay, field: activeField(),
+        key: settings.key, model: settings.stt, languages: languageHints(), delay: settings.delay, field: sessionHints(),
         onEvent: (evt) => {
           if (evt.type === 'session.created' && running) showListening();
           onServerEvent(evt);
@@ -672,7 +688,7 @@ function applyLanguage() {
   saveSettings();
   refreshLangMenu();
   transcriber?.setLanguages(languageHints());
-  transcriber?.setField(activeField());
+  transcriber?.setField(sessionHints());
   if (translator) translator.field = activeField();
   if (running) showListening();
 }
@@ -694,7 +710,46 @@ function showKeyField(open) {
   $('s-key-toggle').textContent = open ? 'API 키 숨기기' : ($('s-key').value.trim() ? 'API 키 보기·수정' : 'API 키 입력');
 }
 
+const cleanTerm = (value) => value.replace(/[<>\r\n]/g, '').trim();
+
+function saveCorrections() {
+  writeLocal(FIX_KEY, JSON.stringify(corrections));
+  transcriber?.setField(sessionHints());
+  for (const t of turns) {
+    if (!t.done || !t.text) continue;
+    t.text = fix(t.text);
+    paint(t);
+  }
+  queueDraft();
+  paintCorrections();
+}
+
+function paintCorrections() {
+  $('s-fix').textContent = `교정 사전 (${corrections.length}개)`;
+  $('f-list').replaceChildren(...corrections.map((rule, i) => {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = rule.from ? `${rule.from} → ${rule.to}` : `${rule.to} (용어)`;
+    const remove = document.createElement('button');
+    remove.textContent = '삭제';
+    remove.onclick = () => { corrections.splice(i, 1); saveCorrections(); };
+    row.append(label, remove);
+    return row;
+  }).reverse());
+}
+
+function openCorrections(source = '', selected = '') {
+  $('f-source').textContent = source;
+  $('f-source').hidden = !source;
+  $('f-from').value = selected;
+  $('f-to').value = '';
+  $('f-result').textContent = '';
+  paintCorrections();
+  $('fix-sheet').showModal();
+}
+
 function openSettings() {
+  paintCorrections();
   $('s-key').value = settings.key;
   showKeyField(false);
   $('s-stt').value = settings.stt;
@@ -789,6 +844,29 @@ $('s-fast').addEventListener('click', (e) => {
   if (usdKrw) showCost(usdKrw);
 });
 
+$('s-fix').onclick = () => { $('settings-sheet').close(); openCorrections(); };
+$('f-close').onclick = () => $('fix-sheet').close();
+$('f-add').onclick = () => {
+  const from = cleanTerm($('f-from').value), to = cleanTerm($('f-to').value);
+  if (!to) { $('f-result').textContent = '맞는 표현을 입력해 주세요.'; return; }
+  if (from === to) { $('f-result').textContent = '들린 표현과 맞는 표현이 같아요.'; return; }
+  corrections = corrections.filter((r) => from ? r.from !== from : r.from || r.to !== to);
+  corrections.push({ from, to });
+  saveCorrections();
+  $('f-from').value = '';
+  $('f-to').value = '';
+  $('f-result').textContent = '추가했어요.';
+};
+
+// 표시된 문장을 누르면 교정 사전을 연다. 글자를 선택해 두면 들린 표현으로 채운다
+for (const area of [$('history'), $('stage')]) {
+  area.addEventListener('click', (e) => {
+    const el = e.target.closest('.turn');
+    const t = el && turns.find((o) => o.el === el);
+    if (t?.text) openCorrections(t.text, getSelection().toString().trim());
+  });
+}
+
 $('s-key-toggle').onclick = () => {
   const open = $('s-key-box').hidden;
   showKeyField(open);
@@ -808,6 +886,7 @@ $('s-test').onclick = async () => {
 };
 closeOnBackdrop($('lang-sheet'));
 closeOnBackdrop($('settings-sheet'));
+closeOnBackdrop($('fix-sheet'));
 
 // 무대에 오래 머문 발화는 위로 올린다
 setInterval(() => {

@@ -59,6 +59,17 @@ test('분야 힌트를 음성 인식과 번역 요청에 넣는다', async () =>
   assert.match(bodies[0].messages[0].content, /건설/);
 });
 
+test('내 용어만 있어도 힌트를 보내고 번역 규칙에 undefined가 들어가지 않는다', async () => {
+  const stt = new Transcriber({ key: 'k', model: 'm', languages: ['ko'], delay: 'medium', field: { keywords: ['현장A'] } });
+  const on = JSON.parse(JSON.stringify(stt.audioConfig().transcription));
+  assert.deepEqual(on.keywords, ['현장A']);
+  assert.equal('prompt' in on, false);
+  const bodies = stubFetch(sse(piece('네')));
+  await new Translator({ key: 'k', model: 'm', field: null }).translate('Oui', { lang: 'fr', partial: true });
+  assert.match(bodies[0].messages[0].content, /프랑스어/);
+  assert.doesNotMatch(bodies[0].messages[0].content, /undefined/);
+});
+
 test('분야 키워드에 금지 문자가 없다', () => {
   for (const { keywords } of Object.values(FIELDS)) for (const k of keywords) assert.doesNotMatch(k, /[<>\r\n]/);
 });

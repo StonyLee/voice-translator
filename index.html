@@ -52,7 +52,8 @@
       <button data-lang="en"><b>English</b><small>한글 번역</small></button>
       <button data-lang="ja"><b>日本語</b><small>한글 번역</small></button>
       <button data-lang="es"><b>Español</b><small>스페인어 · 한글 번역</small></button>
-      <button data-lang="zh" class="span"><b>中文</b><small>중국어 · 한글 번역</small></button>
+      <button data-lang="zh"><b>中文</b><small>중국어 · 한글 번역</small></button>
+      <button data-lang="fr"><b>Français</b><small>프랑스어 · 한글 번역</small></button>
     </div>
     <div class="field" id="field-box" hidden>
       <span>회의 분야</span>
@@ -73,6 +74,7 @@
       </label>
       <p class="hint">키는 이 휴대폰에만 저장되고 OpenAI로만 전송돼요.</p>
     </div>
+    <button id="s-fix" class="ghost wide">교정 사전</button>
     <div class="field">
       <span>듣는 방식</span>
       <div class="segmented two" id="s-listen">
@@ -111,6 +113,20 @@
     </div>
     <p id="s-result" class="hint" role="status"></p>
     <p id="s-version" class="hint"></p>
+  </dialog>
+
+  <dialog id="fix-sheet" class="sheet">
+    <h2>교정 사전</h2>
+    <p id="f-source" class="hint" hidden></p>
+    <label>들린 표현 <input id="f-from" autocomplete="off" spellcheck="false" placeholder="비우면 용어만 등록해요"></label>
+    <label>맞는 표현 <input id="f-to" autocomplete="off" spellcheck="false" placeholder="예: 물량 산출"></label>
+    <p class="hint">이 휴대폰에만 저장돼요. 맞는 표현은 음성 인식 힌트로 OpenAI에 전송돼요.</p>
+    <div class="actions">
+      <button id="f-close" class="ghost">닫기</button>
+      <button id="f-add" class="primary">추가</button>
+    </div>
+    <p id="f-result" class="hint" role="status"></p>
+    <ul id="f-list"></ul>
   </dialog>
 
   <dialog id="confirm" class="sheet">

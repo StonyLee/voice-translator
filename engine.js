@@ -257,6 +257,15 @@ export function toPcm16(frame) {
   return out;
 }
 
+// 교정 사전을 적용한다. 긴 표현부터 한 번에 바꿔, 바꾼 결과가 다시 바뀌지 않게 한다
+export function applyCorrections(text, rules) {
+  const pairs = rules.filter((r) => r.from && r.from !== r.to).sort((a, b) => b.from.length - a.from.length);
+  if (!pairs.length || !text) return text;
+  const map = new Map(pairs.map((r) => [r.from, r.to]));
+  const pattern = new RegExp(pairs.map((r) => r.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  return text.replace(pattern, (m) => map.get(m));
+}
+
 // 글자 종류로 언어를 판별한다 (한국어·영어·일본어)
 export function detectLang(text) {
   let hangul = 0, kana = 0, han = 0, latin = 0;

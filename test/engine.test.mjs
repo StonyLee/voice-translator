@@ -1,7 +1,7 @@
 // 합성 음성으로 엔진을 점검한다: node test/engine.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Segmenter, SENSITIVITY, PEAK_RANGE, FRAME, SAMPLE_RATE, detectLang } from '../engine.js';
+import { Segmenter, SENSITIVITY, PEAK_RANGE, FRAME, SAMPLE_RATE, detectLang, applyCorrections } from '../engine.js';
 
 // 음높이(f0)와 포먼트가 다른 유성음. 프레임 사이에 위상이 이어지도록 샘플 위치를 받는다
 function voice(start, f0, formant, amp) {
@@ -108,6 +108,13 @@ test('세 목소리 중 큰 두 개를 고른다', () => {
   assert.equal(top.length, 2);
   assert.ok(top.includes(log.speakers.get(log.started[0])));
   assert.ok(top.includes(log.speakers.get(log.started[1])));
+});
+
+test('교정 사전을 긴 표현부터 한 번만 적용하고 특수문자도 글자 그대로 찾는다', () => {
+  const rules = [{ from: '수량', to: '물량' }, { from: '수량 산출', to: '물량 산출서' }, { from: '물량', to: '자재' }, { from: 'A.B', to: 'C' }, { from: '', to: '현장명' }];
+  assert.equal(applyCorrections('수량 산출과 수량, 물량', rules), '물량 산출서과 물량, 자재');
+  assert.equal(applyCorrections('A.B AxB', rules), 'C AxB');
+  assert.equal(applyCorrections('그대로', []), '그대로');
 });
 
 test('글자로 언어를 판별한다', () => {
