@@ -1,18 +1,21 @@
-import { Segmenter, SENSITIVITY, detectLang } from './engine.js';
-import { Transcriber, Translator, ApiError, checkKey, fetchUsdKrw, DEFAULT_STT_MODEL, DEFAULT_TRANSLATE_MODEL } from './api.js';
+import { Segmenter, SENSITIVITY, PEAK_RANGE, detectLang } from './engine.js';
+import { Transcriber, Translator, ApiError, checkKey, fetchUsdKrw, FIELDS, DEFAULT_STT_MODEL, DEFAULT_TRANSLATE_MODEL } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 const DEMO = new URLSearchParams(location.search).has('demo');
 const SETTINGS_KEY = 'rt-settings';
 const DRAFT_KEY = 'rt-draft';
 const VOICE_COLORS = ['#f2b35e', '#5fd0c5', '#ef8f9f', '#a99cf0', '#a9d36a', '#6db8ef', '#e6a0d8', '#d0c28a'];
-const LANG_LABEL = { auto: '자동 (영어, 일본어)', ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文' };
+const LANG_LABEL = { auto: '자동 (영어, 일본어)', 'en-ko': '영어/한국어', 'ja-ko': '일어/한국어', ko: '한국어', en: 'English', ja: '日本語', es: 'Español', zh: '中文' };
+// 여러 언어를 듣는 메뉴. 글자 종류로 고르고, 목록에 없는 언어로 보이면 첫 언어로 처리한다
+const LANG_SCOPE = { auto: ['ko', 'en', 'ja'], 'en-ko': ['en', 'ko'], 'ja-ko': ['ja', 'ko'] };
+const FIELD_LANGS = ['ko', 'en', 'en-ko', 'ja-ko'];
 const LANG_TAG = { ko: '한국어', en: 'EN', ja: '日本語', es: 'ES', zh: '中文' };
 const isForeign = (lang) => lang in PARTIAL_GAP;
 const STAGE_HOLD_MS = 9000;
 const PARTIAL_GAP = { ja: 200, en: 450, es: 450, zh: 450 };
 const HEARING_HOLD_MS = 1500;
-const APP_VERSION = 11; // sw.js의 CACHE 번호와 맞춘다
+const APP_VERSION = 12; // sw.js의 CACHE 번호와 맞춘다
 const RATE_KEY = 'rt-rate';
 // 한 시간 내내 외국어를 듣는 경우의 추정: 음성 인식 $0.017×60분 + 번역 약 $0.30 (초당 2회, gpt-6-luna 일반 기준, 빠른 모드는 2배)
 const usdPerHour = () => 0.017 * 60 + (settings.fast ? 0.6 : 0.3);
@@ -28,10 +31,18 @@ function writeLocal(key, value) {
 }
 
 const settings = {
-  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal', delay: 'minimal', fast: true, flip: false,
+  key: '', stt: DEFAULT_STT_MODEL, trans: DEFAULT_TRANSLATE_MODEL, lang: 'auto', sens: 'normal', delay: 'medium', fast: true, flip: false, meeting: true, field: 'general',
   ...readJson(SETTINGS_KEY),
 };
 const saveSettings = () => writeLocal(SETTINGS_KEY, JSON.stringify(settings));
+// 예전 기본값(minimal)은 정확도가 낮아 이번 한 번만 새 기본값으로 옮긴다
+if (settings.rev !== 2) {
+  settings.delay = 'medium';
+  settings.rev = 2;
+  saveSettings();
+}
+const activeField = () => (FIELD_LANGS.includes(settings.lang) ? FIELDS[settings.field] || null : null);
+const langLabel = () => LANG_LABEL[settings.lang] + (activeField() ? ` · ${activeField().label}` : '');
 
 // 기록
 let turns = [];
@@ -128,14 +139,16 @@ function placeOnStage(t) {
 }
 
 function isTopVoice(t) {
-  if (t.speaker == null || !segmenter) return true;
+  if (settings.meeting || t.speaker == null || !segmenter) return true;
   const top = segmenter.topSpeakers();
   return top.length === 0 || top.includes(t.speaker);
 }
 
 function update(t) {
   if (t.noise || !t.text) return;
-  t.lang = settings.lang !== 'auto' ? settings.lang : detectLang(t.text) || t.lang;
+  const scope = LANG_SCOPE[settings.lang];
+  const seen = scope && detectLang(t.text);
+  t.lang = !scope ? settings.lang : !seen ? t.lang : scope.includes(seen) ? seen : scope[0];
   t.hiddenVoice = !isTopVoice(t);
   if (t.hiddenVoice) {
     if (stage.includes(t)) { stage.splice(stage.indexOf(t), 1); t.el?.remove(); t.el = null; refreshPlaceholder(); }
@@ -216,7 +229,7 @@ async function translateFinal(t) {
 /* ---------- 전사 이벤트 ---------- */
 
 function startTurn(id) {
-  const t = { id, itemId: null, speaker: null, lang: settings.lang === 'auto' ? null : settings.lang, text: '', ko: '', koState: 'none', done: false, noise: false, lastRequest: 0, time: Date.now() };
+  const t = { id, itemId: null, speaker: null, lang: LANG_SCOPE[settings.lang] ? null : settings.lang, text: '', ko: '', koState: 'none', done: false, noise: false, lastRequest: 0, time: Date.now() };
   turns.push(t);
   byId.set(id, t);
 }
@@ -278,7 +291,7 @@ function settleOpenTurns() {
 
 function showListening() {
   const speed = translateMs ? ` · 번역 응답 ${(translateMs / 1000).toFixed(1)}초` : '';
-  $('status').textContent = `듣는 중 · ${LANG_LABEL[settings.lang]}${speed}`;
+  $('status').textContent = `듣는 중 · ${langLabel()}${speed}`;
 }
 
 function setRunning(on) {
@@ -295,11 +308,12 @@ function setRunning(on) {
   refreshPlaceholder();
 }
 
-const languageHints = () => (settings.lang === 'auto' ? ['ko', 'en', 'ja'] : [settings.lang]);
+const languageHints = () => LANG_SCOPE[settings.lang] || [settings.lang];
+const listenConfig = () => ({ margin: SENSITIVITY[settings.sens], peakRange: PEAK_RANGE[settings.sens], meeting: settings.meeting });
 
 function makeSegmenter() {
   return new Segmenter({
-    margin: SENSITIVITY[settings.sens],
+    ...listenConfig(),
     onStart: startTurn,
     onAudio: (pcm) => {
       unsavedUsage.audioSec += pcm.length / 24000;
@@ -328,7 +342,7 @@ async function start() {
   $('m-mic').disabled = true;
   try {
     translator = new Translator({
-      key: settings.key, model: settings.trans, fast: settings.fast,
+      key: settings.key, model: settings.trans, fast: settings.fast, field: activeField(),
       // 빠른 모드는 토큰 단가가 2배라 요금 계산용 토큰 수도 2배로 기록한다
       onUsage: ({ prompt_tokens = 0, completion_tokens = 0 }, fast) => {
         unsavedUsage.inTok += prompt_tokens * (fast ? 2 : 1);
@@ -344,10 +358,10 @@ async function start() {
       translator = startDemo({ startTurn, onServerEvent, setSegmenter: (s) => { segmenter = s; }, byId, makeSpeakerUpdate: (id, sp) => { byId.get(id).speaker = sp; }, paintMeter });
     } else {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true, autoGainControl: false },
+        audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true, autoGainControl: settings.meeting },
       });
       transcriber = new Transcriber({
-        key: settings.key, model: settings.stt, languages: languageHints(), delay: settings.delay,
+        key: settings.key, model: settings.stt, languages: languageHints(), delay: settings.delay, field: activeField(),
         onEvent: (evt) => {
           if (evt.type === 'session.created' && running) showListening();
           onServerEvent(evt);
@@ -648,8 +662,19 @@ function closeOnBackdrop(dialog) {
 }
 
 function refreshLangMenu() {
-  $('m-lang-label').textContent = LANG_LABEL[settings.lang];
+  $('m-lang-label').textContent = langLabel();
   document.querySelectorAll('#lang-options button').forEach((b) => b.classList.toggle('selected', b.dataset.lang === settings.lang));
+  $('field-box').hidden = !FIELD_LANGS.includes(settings.lang);
+  document.querySelectorAll('#l-field button').forEach((b) => b.classList.toggle('selected', b.dataset.field === settings.field));
+}
+
+function applyLanguage() {
+  saveSettings();
+  refreshLangMenu();
+  transcriber?.setLanguages(languageHints());
+  transcriber?.setField(activeField());
+  if (translator) translator.field = activeField();
+  if (running) showListening();
 }
 
 function refreshSens() {
@@ -657,6 +682,7 @@ function refreshSens() {
 }
 
 function refreshSpeed() {
+  document.querySelectorAll('#s-listen button').forEach((b) => b.classList.toggle('selected', (b.dataset.meeting === '1') === settings.meeting));
   document.querySelectorAll('#s-delay button').forEach((b) => b.classList.toggle('selected', b.dataset.delay === settings.delay));
   document.querySelectorAll('#s-fast button').forEach((b) => b.classList.toggle('selected', (b.dataset.fast === '1') === settings.fast));
 }
@@ -712,10 +738,17 @@ $('lang-options').addEventListener('click', (e) => {
   const lang = e.target.closest('button')?.dataset.lang;
   if (!lang) return;
   settings.lang = lang;
-  saveSettings();
-  refreshLangMenu();
-  transcriber?.setLanguages(languageHints());
-  if (running) showListening();
+  applyLanguage();
+  // 분야를 고를 수 있는 언어는 분야까지 고른 뒤 닫는다
+  if (FIELD_LANGS.includes(lang)) $('field-box').scrollIntoView({ block: 'nearest' });
+  else $('lang-sheet').close();
+});
+
+$('l-field').addEventListener('click', (e) => {
+  const field = e.target.closest('button')?.dataset.field;
+  if (!field) return;
+  settings.field = field;
+  applyLanguage();
   $('lang-sheet').close();
 });
 
@@ -725,7 +758,16 @@ $('s-sens').addEventListener('click', (e) => {
   settings.sens = sens;
   saveSettings();
   refreshSens();
-  segmenter?.setMargin?.(SENSITIVITY[sens]);
+  segmenter?.configure?.(listenConfig());
+});
+
+$('s-listen').addEventListener('click', (e) => {
+  const mode = e.target.closest('button')?.dataset.meeting;
+  if (!mode) return;
+  settings.meeting = mode === '1';
+  saveSettings();
+  refreshSpeed();
+  segmenter?.configure?.(listenConfig());
 });
 
 $('s-delay').addEventListener('click', (e) => {

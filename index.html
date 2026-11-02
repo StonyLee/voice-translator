@@ -45,12 +45,22 @@
   <dialog id="lang-sheet" class="sheet">
     <h2>듣는 언어</h2>
     <div class="options" id="lang-options">
-      <button data-lang="auto"><b>자동 (영어, 일본어)</b><small>영어·일본어를 구분해 번역하고, 한국어는 그대로 표시</small></button>
-      <button data-lang="ko"><b>한국어</b></button>
-      <button data-lang="en"><b>English</b><small>원문 + 한글 번역</small></button>
-      <button data-lang="ja"><b>日本語</b><small>원문 + 한글 번역</small></button>
-      <button data-lang="es"><b>Español</b><small>스페인어 · 원문 + 한글 번역</small></button>
-      <button data-lang="zh"><b>中文</b><small>중국어 · 원문 + 한글 번역</small></button>
+      <button data-lang="auto" class="span"><b>자동 (영어, 일본어)</b><small>영어·일본어를 구분해 번역하고, 한국어는 그대로 표시</small></button>
+      <button data-lang="en-ko"><b>영어/한국어</b><small>영어만 번역</small></button>
+      <button data-lang="ja-ko"><b>일어/한국어</b><small>일어만 번역</small></button>
+      <button data-lang="ko"><b>한국어</b><small>번역 없음</small></button>
+      <button data-lang="en"><b>English</b><small>한글 번역</small></button>
+      <button data-lang="ja"><b>日本語</b><small>한글 번역</small></button>
+      <button data-lang="es"><b>Español</b><small>스페인어 · 한글 번역</small></button>
+      <button data-lang="zh" class="span"><b>中文</b><small>중국어 · 한글 번역</small></button>
+    </div>
+    <div class="field" id="field-box" hidden>
+      <span>회의 분야</span>
+      <div class="segmented" id="l-field">
+        <button data-field="construction">건설</button>
+        <button data-field="legal">법률</button>
+        <button data-field="general">그 외</button>
+      </div>
     </div>
   </dialog>
 
@@ -62,6 +72,13 @@
         <input id="s-key" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-…">
       </label>
       <p class="hint">키는 이 휴대폰에만 저장되고 OpenAI로만 전송돼요.</p>
+    </div>
+    <div class="field">
+      <span>듣는 방식</span>
+      <div class="segmented two" id="s-listen">
+        <button data-meeting="1">회의 (모든 목소리)</button>
+        <button data-meeting="0">큰 목소리만</button>
+      </div>
     </div>
     <div class="field">
       <span>듣는 범위</span>

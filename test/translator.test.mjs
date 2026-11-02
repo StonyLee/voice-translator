@@ -1,7 +1,7 @@
 // 번역 스트리밍을 가짜 응답으로 점검한다: node --test test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Translator } from '../api.js';
+import { Translator, Transcriber, FIELDS } from '../api.js';
 
 function sse(...parts) {
   const encoder = new TextEncoder();
@@ -39,6 +39,28 @@ test('스페인어와 중국어도 언어 이름과 추정 번역 규칙을 넣�
   await tr.translate('你好', { lang: 'zh', partial: true });
   assert.match(bodies[0].messages[0].content, /스페인어.*추정/);
   assert.match(bodies[1].messages[0].content, /중국어.*추정/);
+});
+
+test('분야 힌트를 음성 인식과 번역 요청에 넣는다', async () => {
+  const stt = new Transcriber({ key: 'k', model: 'm', languages: ['ko'], delay: 'medium', field: FIELDS.legal });
+  stt.send = () => {};
+  const on = stt.audioConfig().transcription;
+  assert.equal(on.prompt, FIELDS.legal.prompt);
+  assert.ok(on.keywords.includes('준거법'));
+  assert.equal(on.delay, 'medium');
+  stt.setField(null);
+  assert.deepEqual([stt.audioConfig().transcription.prompt, stt.audioConfig().transcription.keywords], ['', []]);
+  stt.setField(FIELDS.construction);
+  stt.receive({ type: 'error', error: { message: 'Invalid keywords' } });
+  assert.equal(stt.audioConfig().transcription.keywords, undefined);
+
+  const bodies = stubFetch(sse(piece('네')));
+  await new Translator({ key: 'k', model: 'm', field: FIELDS.construction }).translate('Yes', { lang: 'en', partial: false });
+  assert.match(bodies[0].messages[0].content, /건설/);
+});
+
+test('분야 키워드에 금지 문자가 없다', () => {
+  for (const { keywords } of Object.values(FIELDS)) for (const k of keywords) assert.doesNotMatch(k, /[<>\r\n]/);
 });
 
 test('빠른 모드가 거절되면 빼고 다시 요청한다', async () => {

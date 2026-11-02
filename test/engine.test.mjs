@@ -1,7 +1,7 @@
 // 합성 음성으로 엔진을 점검한다: node test/engine.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Segmenter, SENSITIVITY, FRAME, SAMPLE_RATE, detectLang } from '../engine.js';
+import { Segmenter, SENSITIVITY, PEAK_RANGE, FRAME, SAMPLE_RATE, detectLang } from '../engine.js';
 
 // 음높이(f0)와 포먼트가 다른 유성음. 프레임 사이에 위상이 이어지도록 샘플 위치를 받는다
 function voice(start, f0, formant, amp) {
@@ -23,10 +23,11 @@ function silence(amp = 0.001) {
   return Float32Array.from({ length: FRAME }, () => (Math.random() - 0.5) * amp);
 }
 
-function run(script) {
+function run(script, options = {}) {
   const log = { started: [], ended: [], speakers: new Map(), audio: 0 };
   const seg = new Segmenter({
     margin: SENSITIVITY.normal,
+    ...options,
     onStart: (id) => log.started.push(id),
     onAudio: (p) => { log.audio += p.length; },
     onSpeaker: (id, s) => log.speakers.set(id, s),
@@ -76,6 +77,26 @@ test('큰 목소리 직후의 작은 목소리는 무시한다', () => {
   const { log } = run([[quiet, 1000], [low, 2000], [faint, 1500]]);
   // 큰 목소리 발화 하나만 생기고, 작은 소리로 새 발화가 시작되지 않는다
   assert.equal(log.started.length, 1);
+});
+
+const faraway = (p) => voice(p, 225, 1500, 0.25 * 10 ** (-24 / 20));
+const talks = [[quiet, 1000], [low, 2000], [quiet, 1000], [faraway, 2000], [quiet, 1000]];
+
+test('회의 모드는 24dB 작은 목소리도 보낸다', () => {
+  assert.equal(run(talks).log.started.length, 1);
+  assert.equal(run(talks, { meeting: true }).log.started.length, 2);
+});
+
+test('큰 목소리 모드의 듣는 범위가 실제로 작은 목소리에 영향을 준다', () => {
+  assert.equal(run(talks, { peakRange: PEAK_RANGE.normal }).log.started.length, 1);
+  assert.equal(run(talks, { peakRange: PEAK_RANGE.far, margin: SENSITIVITY.far }).log.started.length, 2);
+});
+
+test('회의 모드는 0.7초 쉼에서 문장을 끊지 않고 목소리가 바뀌어도 나누지 않는다', () => {
+  const pause = [[quiet, 1000], [low, 1500], [quiet, 700], [low, 1500], [quiet, 1000]];
+  assert.equal(run(pause).log.started.length, 2);
+  assert.equal(run(pause, { meeting: true }).log.started.length, 1);
+  assert.equal(run([[quiet, 1000], [low, 2500], [high, 2500], [quiet, 1000]], { meeting: true }).log.started.length, 1);
 });
 
 test('세 목소리 중 큰 두 개를 고른다', () => {

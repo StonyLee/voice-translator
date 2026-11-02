@@ -5,6 +5,7 @@ const FRAME_MS = 40;
 const FFT_SIZE = 1024;
 const BANDS = 12;
 export const SENSITIVITY = { near: 16, normal: 11, far: 7 }; // 소음 대비 필요한 dB
+export const PEAK_RANGE = { near: 12, normal: 18, far: 30 }; // 큰 목소리 모드: 최근 최대 음량보다 이만큼 작은 소리까지 듣는다
 
 const hann = Float32Array.from({ length: FRAME }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FRAME - 1)));
 
@@ -128,11 +129,11 @@ export class SpeakerTracker {
 
 // 큰 목소리만 통과시키는 문턱: 주변 소음과 최근 가장 큰 소리를 함께 기준으로 삼는다
 export class LoudVoiceGate {
-  constructor(margin) { this.margin = margin; this.floor = -55; this.peak = -60; this.above = 0; this.quietFrames = 0; this.open = false; }
+  constructor(margin) { this.margin = margin; this.peakRange = 18; this.minDb = -52; this.floor = -55; this.peak = -60; this.above = 0; this.quietFrames = 0; this.open = false; }
   process(db) {
     this.floor += db < this.floor ? (db - this.floor) * 0.25 : 0.02;
     this.peak = Math.max(db, this.peak - 0.04);
-    const gate = Math.max(this.floor + this.margin, this.peak - 18, -52);
+    const gate = Math.max(this.floor + this.margin, this.peak - this.peakRange, this.minDb);
     const loud = db > gate;
     if (loud) { this.above++; this.quietFrames = 0; } else { this.above = 0; this.quietFrames++; }
     if (!this.open && this.above >= 3) this.open = true;
@@ -141,22 +142,30 @@ export class LoudVoiceGate {
 }
 
 const PREROLL_FRAMES = 8;
-const END_SILENCE_MS = 500;
+const END_SILENCE_MS = 600, MEETING_END_SILENCE_MS = 800;
 const SOFT_MAX_MS = 8000, SOFT_SILENCE_MS = 240, HARD_MAX_MS = 15000;
 const SPLIT_WINDOW = 12, SPLIT_CONFIRM = 10;
 
 // 40ms 프레임을 받아 발화(turn)의 시작·오디오·화자·끝을 알려 준다
 export class Segmenter {
-  constructor({ margin, onStart, onAudio, onSpeaker, onEnd }) {
+  constructor({ margin, peakRange, meeting, onStart, onAudio, onSpeaker, onEnd }) {
     Object.assign(this, { onStart, onAudio, onSpeaker, onEnd });
     this.gate = new LoudVoiceGate(margin);
+    this.configure({ margin, peakRange, meeting });
     this.tracker = new SpeakerTracker();
     this.preroll = [];
     this.turn = null;
     this.nextId = 1;
     this.clock = 0;
   }
-  setMargin(margin) { this.gate.margin = margin; }
+  // 회의 모드: 큰 소리 기준을 없애 작은 목소리도 보내고, 문장을 덜 끊으며, 목소리가 달라져도 발화를 나누지 않는다
+  configure({ margin, peakRange = 18, meeting = false }) {
+    this.gate.margin = margin;
+    this.gate.peakRange = meeting ? Infinity : peakRange;
+    this.gate.minDb = meeting ? -58 : -52;
+    this.meeting = meeting;
+    this.endSilenceMs = meeting ? MEETING_END_SILENCE_MS : END_SILENCE_MS;
+  }
   topSpeakers() { return this.tracker.top(this.clock); }
 
   process(frame) {
@@ -185,7 +194,7 @@ export class Segmenter {
     }
     if (this.turn === t) {
       const age = this.clock - t.startMs;
-      if (quietMs >= END_SILENCE_MS || age >= HARD_MAX_MS || (age >= SOFT_MAX_MS && quietMs >= SOFT_SILENCE_MS)) this.finish();
+      if (quietMs >= this.endSilenceMs || age >= HARD_MAX_MS || (age >= SOFT_MAX_MS && quietMs >= SOFT_SILENCE_MS)) this.finish();
     }
     return { db, loud, active: !!this.turn };
   }
@@ -208,7 +217,7 @@ export class Segmenter {
       t.window.forEach((v) => recent.add(v));
       const differs = t.window.length === SPLIT_WINDOW && voiceDistance(recent.mean, t.avg.mean) > SAME_VOICE;
       t.changed = differs ? t.changed + 1 : 0;
-      if (t.changed >= SPLIT_CONFIRM) {
+      if (t.changed >= SPLIT_CONFIRM && !this.meeting) {
         // 다른 목소리로 바뀌었다: 지금까지를 끝내고 새 발화로 이어 간다
         this.finish();
         this.begin();
